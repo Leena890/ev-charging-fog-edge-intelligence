@@ -49,12 +49,6 @@ st.markdown("""
 
 # Main Title via HTML
 st.markdown('<h1 class="main-title">⚡ EV Charging Station Intelligence Platform</h1>', unsafe_allow_html=True)
-# Sidebar Controls for Real-Time Monitoring
-with st.sidebar:
-    st.markdown("### 📊 Dashboard Controls")
-    if st.button("🔄 Refresh Live Data"):
-        st.cache_data.clear()
-        st.rerun()
 st.markdown('<p style="color: #64748B; font-size: 16px;">Live Edge ML Telemetry & Cloud Analytics Layer</p>', unsafe_allow_html=True)
 
 @st.cache_data(ttl=5)
@@ -77,16 +71,46 @@ def fetch_ev_data():
         st.error(f"Error: {str(e)}")
         return pd.DataFrame()
 
-df = fetch_ev_data()
+raw_df = fetch_ev_data()
 
-if df.empty:
+if raw_df.empty:
     st.warning("No telemetry records found in DynamoDB.")
 else:
+    # OPTION 2 & 3: SIDEBAR CONTROLS & ANOMALY TRACKER WIDGET
+    with st.sidebar:
+        st.markdown("### 📊 Dashboard Controls")
+        if st.button("🔄 Refresh Live Data"):
+            st.cache_data.clear()
+            st.rerun()
+
+        st.markdown("---")
+        st.markdown("### 🚨 Edge ML Status Widget")
+
+        # Calculate totals across the entire raw dataset
+        total_records = len(raw_df)
+        total_anomalies = len(raw_df[(raw_df['cable_temperature_celsius'] > 70.0) | (raw_df['cooling_fan_speed_rpm'] < 500)])
+        healthy_records = total_records - total_anomalies
+
+        st.metric(label="Total Received Logs", value=total_records)
+        st.metric(label="Healthy States", value=healthy_records)
+        st.metric(label="Critical Anomalies Triggered", value=total_anomalies, delta=f"{total_anomalies} Alert(s)", delta_color="inverse")
+
+        st.markdown("---")
+        # Dynamic filter selector
+        available_stations = sorted(raw_df['station_id'].unique().tolist())
+        selected_station = st.selectbox("🎯 Select Station Focus", ["All Stations"] + available_stations)
+
+    # Filter data based on selection
+    if selected_station != "All Stations":
+        df = raw_df[raw_df['station_id'] == selected_station].copy()
+    else:
+        df = raw_df.copy()
+
     # 1. HTML ANOMALY ALERT ENGINE
     critical_alerts = df[(df['cable_temperature_celsius'] > 70.0) | (df['cooling_fan_speed_rpm'] < 500)]
 
     if not critical_alerts.empty:
-        for index, row in critical_alerts.iterrows():
+        for index, row in critical_alerts.head(3).iterrows(): # Show top 3 max to avoid cluttering
             st.markdown(f"""
                 <div class="html-alert-banner">
                     <strong>🚨 CRITICAL HARDWARE ANOMALY DETECTED BY EDGE ML ENGINE</strong><br>
@@ -95,7 +119,7 @@ else:
                 </div>
             """, unsafe_allow_html=True)
     else:
-        st.markdown('<div style="background-color: #DCFCE7; border-left: 6px solid #22C55E; padding: 12px; color: #14532D; border-radius: 6px; margin-bottom:20px;"><strong>✅ Systems Operational:</strong> All nodes reporting safe levels.</div>', unsafe_allow_html=True)
+        st.markdown('<div style="background-color: #DCFCE7; border-left: 6px solid #22C55E; padding: 12px; color: #14532D; border-radius: 6px; margin-bottom:20px;"><strong>✅ Systems Operational:</strong> All active nodes reporting safe levels.</div>', unsafe_allow_html=True)
 
     # 2. METRIC CARDS GENERATED WITH HTML/CSS CHIPS
     latest_log = df.iloc[-1]
@@ -119,8 +143,9 @@ else:
 
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
-    # 3. GRAPHING LAYER
+    # 3. GRAPHING LAYER (ROW 1 & ROW 2)
     st.markdown("### Telemetry Historical Time-Series")
+
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
         fig_temp = px.line(df, x='timestamp', y='cable_temperature_celsius', title="Thermal Performance Profile", markers=True)
@@ -128,3 +153,12 @@ else:
     with chart_col2:
         fig_curr = px.line(df, x='timestamp', y='electrical_current_amperes', title="Electrical Load Signature", markers=True)
         st.plotly_chart(fig_curr, use_container_width=True)
+
+    # OPTION 1: SECOND GRAPHING ROW
+    chart_col3, chart_col4 = st.columns(2)
+    with chart_col3:
+        fig_gas = px.line(df, x='timestamp', y='hydrogen_gas_ppm', title="Hydrogen Off-Gas Concentration", markers=True)
+        st.plotly_chart(fig_gas, use_container_width=True)
+    with chart_col4:
+        fig_fan = px.line(df, x='timestamp', y='cooling_fan_speed_rpm', title="Cooling Actuator Dynamics", markers=True)
+        st.plotly_chart(fig_fan, use_container_width=True)
