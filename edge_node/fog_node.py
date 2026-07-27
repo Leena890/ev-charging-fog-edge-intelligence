@@ -14,7 +14,7 @@ class FogNode:
         self.sqs_client = boto3.client('sqs', region_name='us-east-1')
 
         # 2. Local Deadband Filter State
-        self.last_sent_temp = 25.0
+        self.last_sent_temp = 28.0
         self.deadband_threshold = 1.5  # Ignore temperature changes smaller than 1.5°C
 
         # 3. Machine Learning Configuration (Isolation Forest)
@@ -30,9 +30,9 @@ class FogNode:
         # Simulated normal operations baseline dataset
         baseline_data = []
         for _ in range(100):
-            temp = random.uniform(22.0, 28.0)
-            current = random.uniform(110.0, 140.0)
-            gas = random.uniform(0.5, 2.5)
+            temp = random.uniform(25.0, 32.0)
+            current = random.uniform(120.0, 150.0)
+            gas = random.uniform(1.0, 3.0)
             rpm = random.randint(2400, 2700)
             baseline_data.append([temp, current, gas, rpm])
 
@@ -84,26 +84,27 @@ class FogNode:
                 json.dump(existing_cache, f, indent=4)
 
     def monitor_stream(self):
-        print("\n--- Starting Live Edge Monitoring Stream ---")
+        print("\n--- Starting Continuous Live Edge Monitoring Stream ---")
 
-        # Simulating 12 consecutive live data ticks from sensors
-        for i in range(1, 13):
-            time.sleep(1)
+        tick_count = 0
+        while True:
+            tick_count += 1
+            time.sleep(2)
 
-            # Default normal ranges
-            temp = random.uniform(23.0, 27.0)
-            current = random.uniform(115.0, 135.0)
-            gas = random.uniform(0.8, 2.2)
-            rpm = random.randint(2450, 2650)
+            # Updated baseline ranges
+            temp = random.uniform(28.0, 34.0)
+            current = random.uniform(130.0, 155.0)
+            gas = random.uniform(1.2, 3.5)
+            rpm = random.randint(2500, 2800)
 
-            # Force a massive hardware anomaly on loop 10 to test the ML response
-            if i == 10:
-                temp = 78.5      # Critical spike
-                current = 295.0  # Current surge
-                gas = 45.0       # Outgassing event
-                rpm = 450        # Fan motor failure
+            # Occasional anomaly trigger every 15 cycles for live testing
+            if tick_count % 15 == 0:
+                temp = random.uniform(75.0, 85.0)      # Critical spike
+                current = random.uniform(280.0, 310.0) # Current surge
+                gas = random.uniform(40.0, 50.0)       # Outgassing event
+                rpm = random.randint(400, 600)          # Fan motor failure
 
-            # Construct the structured log payload matching your DynamoDB schema
+            # Construct structured log payload
             payload = {
                 "station_id": "EV-STATION-001",
                 "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -115,7 +116,7 @@ class FogNode:
                 }
             }
 
-            # Predict using the local ML engine (-1 = Anomaly, 1 = Normal)
+            # Predict using local ML engine (-1 = Anomaly, 1 = Normal)
             current_features = [[temp, current, gas, rpm]]
             prediction = self.model.predict(current_features)[0]
 
