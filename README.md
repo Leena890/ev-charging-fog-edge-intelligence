@@ -1,4 +1,5 @@
-# Resilient Edge-to-Cloud EV Charging Intelligence Platform
+# EV Station Intelligence Platform: A Fog-to-Cloud
+Monitoring Pipeline for EV Charging Safety
 
 An end-to-end IoT platform designed to optimize data bandwidth and provide zero-latency safety interventions for modern Electric Vehicle (EV) charging networks.
 
